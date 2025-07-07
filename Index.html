@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Stopwatch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+        .lap-item:nth-child(odd) {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+        .lap-item:last-child {
+            font-weight: bold;
+            color: #f59e0b;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen flex flex-col items-center justify-center text-white p-4">
+    <div class="max-w-md w-full bg-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-center">
+            <h1 class="text-3xl font-bold">Stopwatch</h1>
+            <p class="text-indigo-100 opacity-90">Track your time precisely</p>
+        </div>
+        
+        <!-- Main Display -->
+        <div class="p-6">
+            <!-- Time Display -->
+            <div class="text-center mb-8">
+                <div class="text-5xl font-mono font-semibold tracking-tighter" id="display">
+                    00:00.00
+                </div>
+                <div class="text-sm text-gray-400 mt-2">MINUTES : SECONDS.MILLISECONDS</div>
+            </div>
+            
+            <!-- Controls -->
+            <div class="flex justify-center space-x-4 mb-8">
+                <button id="startBtn" class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-full flex items-center transition-all duration-300 hover:shadow-lg">
+                    <i class="fas fa-play mr-2"></i> Start
+                </button>
+                <button id="pauseBtn" class="hidden bg-yellow-500 hover:bg-yellow-600 text-white px-6 py-3 rounded-full flex items-center transition-all duration-300 hover:shadow-lg">
+                    <i class="fas fa-pause mr-2"></i> Pause
+                </button>
+                <button id="lapBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-full flex items-center transition-all duration-300 hover:shadow-lg">
+                    <i class="fas fa-flag mr-2"></i> Lap
+                </button>
+                <button id="resetBtn" class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-full flex items-center transition-all duration-300 hover:shadow-lg">
+                    <i class="fas fa-stop mr-2"></i> Reset
+                </button>
+            </div>
+            
+            <!-- Stats -->
+            <div class="flex justify-between text-center mb-6">
+                <div class="bg-gray-700 rounded-lg p-3 flex-1 mx-1">
+                    <div class="text-gray-300 text-sm">Laps</div>
+                    <div id="lapCount" class="text-xl font-bold">0</div>
+                </div>
+                <div class="bg-gray-700 rounded-lg p-3 flex-1 mx-1">
+                    <div class="text-gray-300 text-sm">Fastest</div>
+                    <div id="fastestLap" class="text-xl font-bold">--:--</div>
+                </div>
+                <div class="bg-gray-700 rounded-lg p-3 flex-1 mx-1">
+                    <div class="text-gray-300 text-sm">Slowest</div>
+                    <div id="slowestLap" class="text-xl font-bold">--:--</div>
+                </div>
+            </div>
+            
+            <!-- Laps Section -->
+            <div class="border-t border-gray-700 pt-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="font-medium">Lap Times</h3>
+                    <button id="clearLapsBtn" class="text-gray-400 hover:text-gray-200 text-sm">
+                        <i class="fas fa-trash mr-1"></i> Clear All
+                    </button>
+                </div>
+                <div id="lapsContainer" class="max-h-64 overflow-y-auto rounded-lg">
+                    <div class="text-center py-4 text-gray-500" id="noLapsMessage">
+                        No laps recorded yet
+                    </div>
+                    <!-- Laps will be added here dynamically -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="bg-gray-900 p-4 text-center text-gray-500 text-sm">
+            <p>Click <span class="font-bold">Lap</span> to record current time</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
+            const display = document.getElementById('display');
+            const startBtn = document.getElementById('startBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+            const lapBtn = document.getElementById('lapBtn');
+            const resetBtn = document.getElementById('resetBtn');
+            const clearLapsBtn = document.getElementById('clearLapsBtn');
+            const lapsContainer = document.getElementById('lapsContainer');
+            const noLapsMessage = document.getElementById('noLapsMessage');
+            const lapCount = document.getElementById('lapCount');
+            const fastestLap = document.getElementById('fastestLap');
+            const slowestLap = document.getElementById('slowestLap');
+            
+            // Stopwatch variables
+            let startTime = 0;
+            let elapsedTime = 0;
+            let timerInterval = null;
+            let laps = [];
+            let isRunning = false;
+            
+            // Format time as HH:MM:SS
+            function formatTime(time) {
+                const date = new Date(time);
+                const minutes = String(Math.floor(time / 60000)).padStart(2, '0');
+                const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+                const milliseconds = String(Math.floor(date.getUTCMilliseconds() / 10)).padStart(2, '0');
+                
+                return `${minutes}:${seconds}.${milliseconds}`;
+            }
+            
+            // Format lap time (shorter format)
+            function formatLapTime(time) {
+                const date = new Date(time);
+                const minutes = String(Math.floor(time / 60000)).padStart(2, '0');
+                const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+                const milliseconds = String(Math.floor(date.getUTCMilliseconds() / 10)).padStart(2, '0');
+                
+                return `${minutes}:${seconds}.${milliseconds}`;
+            }
+            
+            // Update the display
+            function updateDisplay() {
+                display.textContent = formatTime(elapsedTime);
+                
+                // Add pulse animation when running
+                if (isRunning && !display.classList.contains('pulse-animation')) {
+                    display.classList.add('pulse-animation');
+                } else if (!isRunning) {
+                    display.classList.remove('pulse-animation');
+                }
+            }
+            
+            // Start the stopwatch
+            function startTimer() {
+                if (!isRunning) {
+                    startTime = Date.now() - elapsedTime;
+                    timerInterval = setInterval(() => {
+                        elapsedTime = Date.now() - startTime;
+                        updateDisplay();
+                    }, 10);
+                    isRunning = true;
+                    toggleButtons();
+                }
+            }
+            
+            // Pause the stopwatch
+            function pauseTimer() {
+                if (isRunning) {
+                    clearInterval(timerInterval);
+                    isRunning = false;
+                    toggleButtons();
+                    display.classList.remove('pulse-animation');
+                }
+            }
+            
+            // Reset the stopwatch
+            function resetTimer() {
+                pauseTimer();
+                elapsedTime = 0;
+                updateDisplay();
+                
+                // Reset all laps
+                laps = [];
+                renderLaps();
+                updateStats();
+                
+                toggleButtons(true);
+            }
+            
+            // Record a lap
+            function recordLap() {
+                if (isRunning) {
+                    const lapTime = elapsedTime;
+                    const previousLap = laps.length > 0 ? laps[laps.length - 1].time : 0;
+                    const lapDifference = lapTime - previousLap;
+                    
+                    laps.push({
+                        number: laps.length + 1,
+                        time: lapTime,
+                        lapTime: lapDifference
+                    });
+                    
+                    renderLaps();
+                    updateStats();
+                    
+                    // Show visual feedback
+                    lapBtn.classList.add('bg-blue-700');
+                    setTimeout(() => {
+                        lapBtn.classList.remove('bg-blue-700');
+                    }, 150);
+                } else {
+                    // Show error message if not running
+                    const error = document.createElement('div');
+                    error.className = 'bg-red-900 text-white text-center py-2 mb-2 rounded-lg';
+                    error.textContent = 'Stopwatch must be running to record lap';
+                    lapsContainer.prepend(error);
+                    
+                    setTimeout(() => {
+                        error.remove();
+                    }, 2000);
+                }
+            }
+            
+            // Render laps to the DOM
+            function renderLaps() {
+                lapsContainer.innerHTML = '';
+                
+                if (laps.length === 0) {
+                    lapsContainer.appendChild(noLapsMessage);
+                    lapCount.textContent = '0';
+                    fastestLap.textContent = '--:--';
+                    slowestLap.textContent = '--:--';
+                    return;
+                }
+                
+                laps.forEach((lap, index) => {
+                    const lapItem = document.createElement('div');
+                    lapItem.className = 'lap-item flex justify-between items-center p-3';
+                    
+                    const leftDiv = document.createElement('div');
+                    leftDiv.className = 'text-gray-400';
+                    leftDiv.textContent = `Lap ${lap.number}`;
+                    
+                    const rightDiv = document.createElement('div');
+                    rightDiv.className = 'font-mono';
+                    rightDiv.textContent = formatLapTime(lap.lapTime);
+                    
+                    lapItem.appendChild(leftDiv);
+                    lapItem.appendChild(rightDiv);
+                    
+                    lapsContainer.appendChild(lapItem);
+                });
+                
+                lapCount.textContent = laps.length;
+            }
+            
+            // Update lap statistics
+            function updateStats() {
+                if (laps.length === 0) return;
+                
+                const lapTimes = laps.map(lap => lap.lapTime);
+                const minLap = Math.min(...lapTimes);
+                const maxLap = Math.max(...lapTimes);
+                
+                fastestLap.textContent = formatLapTime(minLap);
+                slowestLap.textContent = formatLapTime(maxLap);
+            }
+            
+            // Clear all laps
+            function clearAllLaps() {
+                if (laps.length > 0) {
+                    laps = [];
+                    renderLaps();
+                    updateStats();
+                }
+            }
+            
+            // Toggle button visibility
+            function toggleButtons(reset = false) {
+                if (reset) {
+                    startBtn.classList.remove('hidden');
+                    pauseBtn.classList.add('hidden');
+                    lapBtn.classList.remove('hidden');
+                } else {
+                    startBtn.classList.toggle('hidden');
+                    pauseBtn.classList.toggle('hidden');
+                }
+            }
+            
+            // Event Listeners
+            startBtn.addEventListener('click', startTimer);
+            pauseBtn.addEventListener('click', pauseTimer);
+            resetBtn.addEventListener('click', resetTimer);
+            lapBtn.addEventListener('click', recordLap);
+            clearLapsBtn.addEventListener('click', clearAllLaps);
+            
+            // Initialize display
+            updateDisplay();
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                switch(e.code) {
+                    case 'Space':
+                        e.preventDefault();
+                        if (isRunning) pauseTimer(); else startTimer();
+                        break;
+                    case 'KeyL':
+                        e.preventDefault();
+                        recordLap();
+                        break;
+                    case 'KeyR':
+                        e.preventDefault();
+                        resetTimer();
+                        break;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
